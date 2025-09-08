@@ -1,0 +1,152 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  CLIENT
+}
+
+enum InstanceStatus {
+  CONNECTED
+  DISCONNECTED
+  CONNECTING
+  QRCODE
+  OPENING
+  PAIRING
+  UNPAIRED
+  UNPAIRED_IDLE
+  TIMEOUT
+  TAKEOVER
+  FAILED
+}
+
+enum IntegrationType {
+  WEBHOOK
+  RABBITMQ
+  SQS
+  CHATWOOT
+  TYPEBOT
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      UserRole @default(CLIENT)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos
+  instances Instance[]
+  limits    UserLimits?
+
+  @@map("users")
+}
+
+model UserLimits {
+  id                String  @id @default(cuid())
+  userId            String  @unique
+  maxInstances      Int     @default(1)
+  maxMessagesPerDay Int     @default(1000)
+  maxContacts       Int     @default(100)
+  maxGroups         Int     @default(10)
+  canUseWebhooks    Boolean @default(true)
+  canUseIntegrations Boolean @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relacionamentos
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_limits")
+}
+
+model Instance {
+  id          String         @id @default(cuid())
+  name        String         @unique
+  token       String         @unique
+  status      InstanceStatus @default(DISCONNECTED)
+  qrCode      String?
+  phoneNumber String?
+  userId      String
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  // Configurações da instância
+  settings InstanceSettings?
+  
+  // Relacionamentos
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  integrations InstanceIntegration[]
+  messages     Message[]
+
+  @@map("instances")
+}
+
+model InstanceSettings {
+  id                String  @id @default(cuid())
+  instanceId        String  @unique
+  rejectCall        Boolean @default(false)
+  msgCall           String?
+  groupsIgnore      Boolean @default(false)
+  alwaysOnline      Boolean @default(false)
+  readMessages      Boolean @default(false)
+  readStatus        Boolean @default(false)
+  syncFullHistory   Boolean @default(false)
+  proxyHost         String?
+  proxyPort         String?
+  proxyProtocol     String?
+  proxyUsername     String?
+  proxyPassword     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relacionamentos
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@map("instance_settings")
+}
+
+model InstanceIntegration {
+  id         String           @id @default(cuid())
+  instanceId String
+  type       IntegrationType
+  isActive   Boolean          @default(true)
+  config     Json
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  // Relacionamentos
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@map("instance_integrations")
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  instanceId String
+  to         String
+  from       String
+  body       String
+  type       String
+  timestamp  DateTime
+  status     String?
+  createdAt  DateTime @default(now())
+
+  // Relacionamentos
+  instance Instance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
